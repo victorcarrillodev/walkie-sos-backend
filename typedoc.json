@@ -1,0 +1,10 @@
+{
+  "$schema": "https://typedoc.org/schema.json",
+  "entryPoints": ["src"],
+  "entryPointStrategy": "expand",
+  "out": "docs/internal",
+  "exclude": ["**/*.test.ts", "node_modules/**"],
+  "name": "Documentación Interna del Backend",
+  "includeVersion": true,
+  "readme": "README.md"
+}

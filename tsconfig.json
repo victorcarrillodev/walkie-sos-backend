@@ -1,0 +1,17 @@
+{
+  "compilerOptions": {
+    "target": "ES2020" /* Versión moderna de JS */,
+    "module": "commonjs" /* Node usa CommonJS por defecto */,
+    "lib": ["ES2020"],
+    "outDir": "./dist" /* Todo el código compilado irá aquí */,
+    "rootDir": "./src" /* Raíz de tu código fuente */,
+    "strict": true /* Modo estricto activado (Recomendado) */,
+    "esModuleInterop": true /* Compatibilidad módulos CommonJS/ES */,
+    "skipLibCheck": true /* Acelera la compilación */,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true /* Importar JSONs si es necesario */,
+    "removeComments": true /* Limpia comentarios en producción */
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "**/*.test.ts"]
+}

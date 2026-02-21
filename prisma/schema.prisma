@@ -1,0 +1,109 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+// --- MODELOS ---
+
+// 1. Usuario: Quien usa el Walkie Talkie
+model User {
+  id        String   @id @default(uuid()) // UUID es más seguro que ID numérico
+  email     String   @unique
+  password  String   // Hash de la contraseña
+  username  String   @unique
+  fullName  String?
+  avatarUrl String?  // Opcional: foto de perfil
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relaciones
+  ownedChannels Channel[]       @relation("OwnerChannels")
+  memberships   ChannelMember[] // Canales a los que pertenece
+  alertsSent    Alert[]         // Alertas de robo enviadas
+}
+
+// 2. Canal: La "Frecuencia" o Sala de Chat de Voz
+model Channel {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  isPrivate   Boolean  @default(false)
+  accessKey   String?  // Contraseña para entrar si es privado
+  
+  ownerId     String
+  owner       User     @relation("OwnerChannels", fields: [ownerId], references: [id])
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relaciones
+  members     ChannelMember[]
+  alerts      Alert[] // Alertas generadas en este canal
+}
+
+// Tabla intermedia para gestionar miembros y roles en el canal
+model ChannelMember {
+  id        String   @id @default(uuid())
+  userId    String
+  channelId String
+  role      MemberRole @default(USER) // ADMIN, USER, MODERATOR
+  joinedAt  DateTime   @default(now())
+
+  user      User     @relation(fields: [userId], references: [id])
+  channel   Channel  @relation(fields: [channelId], references: [id])
+
+  @@unique([userId, channelId]) // Un usuario no puede unirse dos veces al mismo canal
+}
+
+// 3. Alerta: El evento de Robo/Emergencia
+model Alert {
+  id        String      @id @default(uuid())
+  type      AlertType   @default(THEFT) // ROBO, PÁNICO, MEDICA
+  status    AlertStatus @default(ACTIVE)
+  
+  // Geolocalización (Vital para alertas de robo)
+  latitude  Float
+  longitude Float
+  address   String?     // Dirección aproximada (opcional)
+
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+
+  channelId String?
+  channel   Channel? @relation(fields: [channelId], references: [id])
+
+  createdAt DateTime @default(now())
+  resolvedAt DateTime?
+}
+
+// --- ENUMS ---
+// Tipos de datos fijos para evitar errores de escritura
+
+enum MemberRole {
+  ADMIN
+  MODERATOR
+  USER
+}
+
+enum AlertType {
+  THEFT       // Robo
+  PANIC       // Botón de pánico
+  MEDICAL     // Emergencia médica
+  SUSPICIOUS  // Actividad sospechosa
+}
+
+enum AlertStatus {
+  ACTIVE      // Alerta en curso
+  RESOLVED    // Falsa alarma o solucionado
+  DISMISSED   // Ignorada
+}

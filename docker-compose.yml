@@ -1,0 +1,39 @@
+version: '3.8'
+
+services:
+  # Servicio 1: Tu Backend
+  api:
+    build: .
+    container_name: walkie_backend
+    ports:
+      - '3000:3000'
+    environment:
+      # OJO: Aquí el host no es 'localhost', es el nombre del servicio de abajo ('postgres')
+      - DATABASE_URL=postgresql://victor:Michisita%2316@postgres:5432/walkie?schema=public
+      - JWT_SECRET=super_secreto_seguro_docker
+      - NODE_ENV=production
+      - PORT=3000
+      - CORS_ORIGIN=*
+    depends_on:
+      - postgres
+    restart: always
+    # Comando especial: Espera a que la DB esté lista, hace push del schema y luego inicia
+    command: >
+      sh -c "npx prisma db push && node dist/server.js"
+
+  # Servicio 2: Base de Datos PostgreSQL
+  postgres:
+    image: postgres:15-alpine
+    container_name: walkie_db
+    ports:
+      - '5432:5432' # Para que puedas conectarte desde tu PC (DBeaver, TablePlus)
+    environment:
+      - POSTGRES_USER=victor
+      - POSTGRES_PASSWORD=Michisita#16
+      - POSTGRES_DB=walkie
+    volumes:
+      - pgdata:/var/lib/postgresql/data # Persistencia: Guarda los datos aunque apagues el contenedor
+
+# Definimos el volumen para guardar los datos de la DB
+volumes:
+  pgdata:
