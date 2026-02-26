@@ -1,7 +1,7 @@
 version: '3.8'
 
 services:
-  # Servicio 1: Tu Backend
+  # Servicio 1: Tu Backend de Alto Valor
   api:
     build: .
     container_name: walkie_backend
@@ -20,6 +20,9 @@ services:
     # Comando especial: Espera a que la DB esté lista, hace push del schema y luego inicia
     command: >
       sh -c "npx prisma db push && node dist/server.js"
+    # 👇 ESTA ES LA MAGIA PARA QUE NO SE LE BORREN LAS FOTOS 👇
+    volumes:
+      - ./uploads:/app/uploads
 
   # Servicio 2: Base de Datos PostgreSQL
   postgres:
@@ -32,7 +35,7 @@ services:
       - POSTGRES_PASSWORD=Michisita#16
       - POSTGRES_DB=walkie
     volumes:
-      - pgdata:/var/lib/postgresql/data # Persistencia: Guarda los datos aunque apagues el contenedor
+      - pgdata:/var/lib/postgresql/data # Persistencia: Guarda los datos de la DB
 
 # Definimos el volumen para guardar los datos de la DB
 volumes:
