@@ -1,5 +1,5 @@
 import { prisma } from '../../shared/infra/prisma'
-import { MemberRole } from '../../../src/generated/prisma/client'
+import { MemberRole } from '../../generated/prisma/client'
 
 export class ChannelService {
   // 1. Crear un nuevo canal
