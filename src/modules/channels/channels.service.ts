@@ -1,5 +1,5 @@
 import { prisma } from '../../shared/infra/prisma'
-import { MemberRole } from '../../generated/prisma/client'
+import { MemberRole } from '@prisma/client'
 
 export class ChannelService {
   // 1. Crear un nuevo canal
@@ -55,7 +55,7 @@ export class ChannelService {
 
     if (!channel) throw new Error('El canal no existe, mi compa.')
 
-    const requesterMember = channel.members.find((m) => m.userId === requesterId)
+    const requesterMember = channel.members.find((m: any) => m.userId === requesterId)
     if (!requesterMember) throw new Error('Tú ni estás en este grupo, no puedes invitar a nadie.')
 
     if (channel.isPrivate && requesterMember.role === MemberRole.USER) {

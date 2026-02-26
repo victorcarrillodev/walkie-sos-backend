@@ -1,5 +1,5 @@
 import { prisma } from '../../shared/infra/prisma'
-import { AlertStatus } from '../../../src/generated/prisma/client'
+import { AlertStatus } from '@prisma/client'
 
 export class AlertsService {
   // 1. Revisar si hay una alerta activa en un grupo específico
