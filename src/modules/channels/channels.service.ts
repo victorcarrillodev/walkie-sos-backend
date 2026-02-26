@@ -1,7 +1,8 @@
 import { prisma } from '../../shared/infra/prisma'
+import { MemberRole } from '../../../src/generated/prisma/client'
 
 export class ChannelService {
-  // Crear un nuevo canal
+  // 1. Crear un nuevo canal
   async createChannel(
     userId: string,
     data: { name: string; description?: string; isPrivate?: boolean; accessKey?: string },
@@ -11,37 +12,63 @@ export class ChannelService {
         name: data.name,
         description: data.description,
         isPrivate: data.isPrivate || false,
-        accessKey: data.accessKey, // En producción, esto debería hashearse también
+        isGroup: true, // Asumimos que es grupo por defecto
+        accessKey: data.accessKey,
         ownerId: userId,
         members: {
           create: {
             userId: userId,
-            role: 'ADMIN',
+            role: MemberRole.ADMIN, // El creador es el alfa
           },
         },
       },
     })
   }
 
-  // Listar canales donde soy miembro
+  // 2. Listar canales donde soy miembro
   async getUserChannels(userId: string) {
     return await prisma.channel.findMany({
       where: {
-        members: {
-          some: { userId: userId },
-        },
+        members: { some: { userId: userId } },
       },
       include: {
-        _count: { select: { members: true } }, // Contar cuántos usuarios hay
+        _count: { select: { members: true } },
       },
+      orderBy: { updatedAt: 'desc' },
     })
   }
 
-  // Buscar canales públicos (para unirse)
+  // 3. Buscar canales públicos (para unirse)
   async getPublicChannels() {
     return await prisma.channel.findMany({
       where: { isPrivate: false },
-      take: 20, // Paginación simple
+      take: 20,
+    })
+  }
+
+  // 4. NUEVO: Agregar compa al canal
+  async addMemberToGroup(channelId: string, targetUserId: string, requesterId: string) {
+    const channel = await prisma.channel.findUnique({
+      where: { id: channelId },
+      include: { members: true },
+    })
+
+    if (!channel) throw new Error('El canal no existe, mi compa.')
+
+    const requesterMember = channel.members.find((m) => m.userId === requesterId)
+    if (!requesterMember) throw new Error('Tú ni estás en este grupo, no puedes invitar a nadie.')
+
+    if (channel.isPrivate && requesterMember.role === MemberRole.USER) {
+      throw new Error('Este grupo es privado. Solo los administradores pueden meter gente nueva.')
+    }
+
+    return await prisma.channelMember.create({
+      data: {
+        channelId: channelId,
+        userId: targetUserId,
+        role: MemberRole.USER,
+      },
+      include: { user: { select: { id: true, alias: true, firstName: true } } },
     })
   }
 }

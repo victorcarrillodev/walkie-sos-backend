@@ -5,6 +5,9 @@ import morgan from 'morgan'
 
 import authRoutes from './modules/auth/auth.routes' // <--- IMPORTAR
 import channelRoutes from './modules/channels/channels.routes'
+import contactRoutes from './modules/contacts/contacts.routes'
+import alertRoutes from './modules/alerts/alerts.routes'
+
 import { env } from './config/env'
 
 import swaggerJsDoc from 'swagger-jsdoc'
@@ -28,6 +31,8 @@ app.use(morgan('dev')) // Logger de peticiones HTTP
 // Rutas
 app.use('/api/auth', authRoutes) // <--- AGREGAR RUTA BASE
 app.use('/api/channels', channelRoutes)
+app.use('/api/contacts', contactRoutes)
+app.use('/api/alerts', alertRoutes)
 // Health Check (Útil para saber si el VPS está vivo)
 app.get('/health', (req, res) => {
   res.status(200).json({ status: 'OK', timestamp: new Date() })

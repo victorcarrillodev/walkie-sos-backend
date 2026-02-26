@@ -1,9 +1,4 @@
 // This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client"
   output   = "../src/generated/prisma"
@@ -12,33 +7,55 @@ generator client {
 datasource db {
   provider = "postgresql"
 }
-// --- MODELOS ---
 
-// 1. Usuario: Quien usa el Walkie Talkie
+// --- MODELOS ---
+// Usuario
 model User {
-  id        String   @id @default(uuid()) // UUID es más seguro que ID numérico
+  id        String   @id @default(uuid())
+  firstName String
+  lastName  String
+  alias     String   @unique
   email     String   @unique
-  password  String   // Hash de la contraseña
-  username  String   @unique
-  fullName  String?
-  avatarUrl String?  // Opcional: foto de perfil
+  password  String   
+  avatarUrl String?
   
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   // Relaciones
-  ownedChannels Channel[]       @relation("OwnerChannels")
-  memberships   ChannelMember[] // Canales a los que pertenece
-  alertsSent    Alert[]         // Alertas de robo enviadas
+  ownedChannels   Channel[]       @relation("OwnerChannels")
+  memberships     ChannelMember[]
+  alertsSent      Alert[]
+  
+  // Relaciones para el historial de contactos
+  contacts        Contact[]       @relation("UserContacts")
+  contactedBy     Contact[]       @relation("ContactedUsers")
 }
 
-// 2. Canal: La "Frecuencia" o Sala de Chat de Voz
+// 2. Historial de Contactos (NUEVO)
+// Guarda con quién ha hablado el usuario recientemente
+model Contact {
+  id              String   @id @default(uuid())
+  userId          String
+  contactId       String
+  lastContactedAt DateTime @default(now()) // Se actualiza cada vez que hablan
+
+  user            User     @relation("UserContacts", fields: [userId], references: [id])
+  contactUser     User     @relation("ContactedUsers", fields: [contactId], references: [id])
+
+  // Un usuario solo puede tener a otro usuario una vez en su lista de contactos
+  @@unique([userId, contactId]) 
+}
+
+// 3. Grupos / Canales (Modificado)
+// Actúa como "Grupos" donde puede haber Admins o Miembros
 model Channel {
   id          String   @id @default(uuid())
   name        String
   description String?
   isPrivate   Boolean  @default(false)
-  accessKey   String?  // Contraseña para entrar si es privado
+  isGroup     Boolean  @default(true) // NUEVO: Para diferenciar 1-a-1 de Grupos grandes
+  accessKey   String?  
   
   ownerId     String
   owner       User     @relation("OwnerChannels", fields: [ownerId], references: [id])
@@ -46,14 +63,13 @@ model Channel {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  // Relaciones
   members     ChannelMember[]
-  alerts      Alert[] // Alertas generadas en este canal
+  alerts      Alert[] 
 }
 
-// Tabla intermedia para gestionar miembros y roles en el canal
+// Tabla intermedia para gestionar miembros y roles en el grupo
 model ChannelMember {
-  id        String   @id @default(uuid())
+  id        String     @id @default(uuid())
   userId    String
   channelId String
   role      MemberRole @default(USER) // ADMIN, USER, MODERATOR
@@ -62,19 +78,18 @@ model ChannelMember {
   user      User     @relation(fields: [userId], references: [id])
   channel   Channel  @relation(fields: [channelId], references: [id])
 
-  @@unique([userId, channelId]) // Un usuario no puede unirse dos veces al mismo canal
+  @@unique([userId, channelId]) 
 }
 
-// 3. Alerta: El evento de Robo/Emergencia
+// 4. Alerta (Sin cambios)
 model Alert {
   id        String      @id @default(uuid())
-  type      AlertType   @default(THEFT) // ROBO, PÁNICO, MEDICA
+  type      AlertType   @default(THEFT) 
   status    AlertStatus @default(ACTIVE)
   
-  // Geolocalización (Vital para alertas de robo)
   latitude  Float
   longitude Float
-  address   String?     // Dirección aproximada (opcional)
+  address   String?     
 
   userId    String
   user      User     @relation(fields: [userId], references: [id])
@@ -87,8 +102,6 @@ model Alert {
 }
 
 // --- ENUMS ---
-// Tipos de datos fijos para evitar errores de escritura
-
 enum MemberRole {
   ADMIN
   MODERATOR
@@ -96,14 +109,14 @@ enum MemberRole {
 }
 
 enum AlertType {
-  THEFT       // Robo
-  PANIC       // Botón de pánico
-  MEDICAL     // Emergencia médica
-  SUSPICIOUS  // Actividad sospechosa
+  THEFT       
+  PANIC       
+  MEDICAL     
+  SUSPICIOUS  
 }
 
 enum AlertStatus {
-  ACTIVE      // Alerta en curso
-  RESOLVED    // Falsa alarma o solucionado
-  DISMISSED   // Ignorada
+  ACTIVE      
+  RESOLVED    
+  DISMISSED   
 }

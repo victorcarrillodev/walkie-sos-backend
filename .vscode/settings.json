@@ -1,0 +1,23 @@
+{
+  "cSpell.words": ["datasource", "Geolocalización", "postgresql", "uuid", "Walkie"],
+  "workbench.colorCustomizations": {
+    "activityBar.activeBackground": "#00e4cd",
+    "activityBar.background": "#00e4cd",
+    "activityBar.foreground": "#15202b",
+    "activityBar.inactiveForeground": "#15202b99",
+    "activityBarBadge.background": "#e820ff",
+    "activityBarBadge.foreground": "#e7e7e7",
+    "commandCenter.border": "#e7e7e799",
+    "sash.hoverBorder": "#00e4cd",
+    "statusBar.background": "#00b19f",
+    "statusBar.foreground": "#e7e7e7",
+    "statusBarItem.hoverBackground": "#00e4cd",
+    "statusBarItem.remoteBackground": "#00b19f",
+    "statusBarItem.remoteForeground": "#e7e7e7",
+    "titleBar.activeBackground": "#00b19f",
+    "titleBar.activeForeground": "#e7e7e7",
+    "titleBar.inactiveBackground": "#00b19f99",
+    "titleBar.inactiveForeground": "#e7e7e799"
+  },
+  "peacock.color": "#00b19f"
+}

@@ -1,33 +1,74 @@
-import { Request, Response } from 'express'
+import { Response } from 'express'
 import { ChannelService } from './channels.service'
-import { verifyToken } from '../../shared/utils/jwt'
+import { AuthenticatedRequest } from '../../shared/middlewares/auth.middleware'
+import { z } from 'zod'
 
 const channelService = new ChannelService()
 
-// Helper rápido para sacar ID del token (esto debería ir en un middleware real)
-const getUserId = (req: Request) => {
-  const token = req.headers.authorization?.replace('Bearer ', '')
-  if (!token) throw new Error('No token')
-  const decoded = verifyToken(token)
-  return decoded.id
-}
+// Validaciones firmes con Zod
+const createGroupSchema = z.object({
+  name: z.string().min(3, 'El nombre debe tener al menos 3 letras'),
+  description: z.string().optional(),
+  isPrivate: z.boolean().optional(),
+  accessKey: z.string().optional(),
+})
 
-export const create = async (req: Request, res: Response) => {
+const addMemberSchema = z.object({
+  targetUserId: z.string().uuid('El ID del usuario no es válido'),
+})
+
+export const create = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
-    const userId = getUserId(req)
-    const channel = await channelService.createChannel(userId, req.body)
+    const userId = req.user!.id
+    const data = createGroupSchema.parse(req.body)
+
+    const channel = await channelService.createChannel(userId, data)
     res.status(201).json(channel)
   } catch (error: any) {
+    if (error instanceof z.ZodError) {
+      res.status(400).json({ error: error.issues.map((e) => e.message).join(', ') })
+      return
+    }
     res.status(400).json({ error: error.message })
   }
 }
 
-export const listMyChannels = async (req: Request, res: Response) => {
+export const listMyChannels = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
-    const userId = getUserId(req)
+    const userId = req.user!.id
     const channels = await channelService.getUserChannels(userId)
     res.json(channels)
   } catch (error: any) {
-    res.status(401).json({ error: 'No autorizado' })
+    res.status(500).json({ error: 'Fallo al obtener los grupos: ' + error.message })
+  }
+}
+
+export const getPublic = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const channels = await channelService.getPublicChannels()
+    res.json(channels)
+  } catch (error: any) {
+    res.status(500).json({ error: 'Error al buscar canales públicos' })
+  }
+}
+
+export const addMember = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const requesterId = req.user!.id
+
+    // AQUÍ ESTÁ LA MAGIA, MI COMPA: Forzamos a que TypeScript entienda que es un string
+    const channelId = req.params.channelId as string
+
+    const data = addMemberSchema.parse(req.body)
+
+    const newMember = await channelService.addMemberToGroup(channelId, data.targetUserId, requesterId)
+    res.status(201).json({ message: 'Compa agregado al batallón', member: newMember })
+  } catch (error: any) {
+    // Manejo de error cuando intentan meter a alguien que ya está adentro
+    if (error.code === 'P2002') {
+      res.status(400).json({ error: 'Este compa ya está en el grupo.' })
+      return
+    }
+    res.status(400).json({ error: error.message })
   }
 }
