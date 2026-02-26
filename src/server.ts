@@ -43,7 +43,7 @@ io.on('connection', (socket: Socket) => {
   const user = authSocket.user
 
   // Log de conexión exitosa
-  Logger.info(`✅ Conectado: ${user?.username} (ID: ${user?.id})`)
+  Logger.info(`✅ Conectado: ${user?.alias} (ID: ${user?.id})`)
 
   // ---------------------------------------------------------
   // CARGA DE MÓDULOS
@@ -59,7 +59,7 @@ io.on('connection', (socket: Socket) => {
 
   // Evento global de desconexión
   socket.on('disconnect', (reason) => {
-    Logger.info(`❌ Desconectado: ${user?.username} (Razón: ${reason})`)
+    Logger.info(`❌ Desconectado: ${user?.alias} (Razón: ${reason})`)
   })
 })
 
