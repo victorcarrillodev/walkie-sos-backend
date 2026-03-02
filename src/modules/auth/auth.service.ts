@@ -45,7 +45,8 @@ export class AuthService {
       },
     })
 
-    const token = generateToken(newUser.id)
+    // CORRECCIÓN AQUÍ: Pasamos el ID y el Alias para generar el token
+    const token = generateToken(newUser.id, newUser.alias)
 
     return {
       user: {
@@ -70,7 +71,8 @@ export class AuthService {
     const isValid = await comparePassword(data.password, user.password)
     if (!isValid) throw new Error('Credenciales inválidas')
 
-    const token = generateToken(user.id)
+    // CORRECCIÓN AQUÍ: Pasamos el ID y el Alias para generar el token
+    const token = generateToken(user.id, user.alias)
 
     return {
       user: {
