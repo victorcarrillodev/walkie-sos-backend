@@ -46,7 +46,7 @@ export class ChannelService {
     })
   }
 
-  // 4. NUEVO: Agregar compa al canal
+  // 4. Agregar compa al canal
   async addMemberToGroup(channelId: string, targetUserId: string, requesterId: string) {
     const channel = await prisma.channel.findUnique({
       where: { id: channelId },
@@ -69,6 +69,28 @@ export class ChannelService {
         role: MemberRole.USER,
       },
       include: { user: { select: { id: true, alias: true, firstName: true } } },
+    })
+  }
+
+  // 5. NUEVO: Unirse a un canal por su nombre exacto
+  async joinChannelByName(channelName: string, userId: string) {
+    // Buscamos si existe un canal con ese nombre (que no sea privado)
+    const channel = await prisma.channel.findFirst({
+      where: {
+        name: channelName,
+        isPrivate: false,
+      },
+    })
+
+    if (!channel) throw new Error('El canal no existe o es privado, mi compa.')
+
+    // Si existe, agregamos al usuario que lo buscó
+    return await prisma.channelMember.create({
+      data: {
+        channelId: channel.id,
+        userId: userId,
+        role: MemberRole.USER,
+      },
     })
   }
 }

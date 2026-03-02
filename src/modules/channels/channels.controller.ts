@@ -17,6 +17,10 @@ const addMemberSchema = z.object({
   targetUserId: z.string().uuid('El ID del usuario no es válido'),
 })
 
+const joinByNameSchema = z.object({
+  name: z.string().min(1, 'El nombre del canal es obligatorio'),
+})
+
 export const create = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const userId = req.user!.id
@@ -67,6 +71,27 @@ export const addMember = async (req: AuthenticatedRequest, res: Response): Promi
     // Manejo de error cuando intentan meter a alguien que ya está adentro
     if (error.code === 'P2002') {
       res.status(400).json({ error: 'Este compa ya está en el grupo.' })
+      return
+    }
+    res.status(400).json({ error: error.message })
+  }
+}
+
+export const joinChannel = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const userId = req.user!.id
+    const data = joinByNameSchema.parse(req.body)
+
+    const newMember = await channelService.joinChannelByName(data.name, userId)
+    res.status(200).json({ message: 'Te has unido al canal con éxito', member: newMember })
+  } catch (error: any) {
+    // Si da el error P2002 de Prisma, significa que el usuario ya estaba en el grupo
+    if (error.code === 'P2002') {
+      res.status(400).json({ error: 'Ya eres miembro de este grupo.' })
+      return
+    }
+    if (error instanceof z.ZodError) {
+      res.status(400).json({ error: error.issues.map((e) => e.message).join(', ') })
       return
     }
     res.status(400).json({ error: error.message })
