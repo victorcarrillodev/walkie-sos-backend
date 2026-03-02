@@ -5,6 +5,13 @@ export const registerChannelHandlers = (io: Server, socket: Socket) => {
   const authSocket = socket as AuthenticatedSocket
   const user = authSocket.user // Ya trae el alias gracias al middleware
 
+  // 🌟 NUEVO: Obligamos al usuario a escuchar siempre su "frecuencia personal" (su propio ID)
+  // Esto permite que reciba llamadas directas aunque no esté dentro de la pantalla de chat
+  if (user?.id) {
+    socket.join(user.id)
+    console.log(`📡 ${user.alias} está a la escucha en su frecuencia personal.`)
+  }
+
   // 1. Unirse a una Frecuencia
   socket.on('join-channel', (channelId: string) => {
     socket.join(channelId)
