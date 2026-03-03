@@ -5,8 +5,6 @@ export const registerChannelHandlers = (io: Server, socket: Socket) => {
   const authSocket = socket as AuthenticatedSocket
   const user = authSocket.user // Ya trae el alias gracias al middleware
 
-  // 🌟 NUEVO: Obligamos al usuario a escuchar siempre su "frecuencia personal" (su propio ID)
-  // Esto permite que reciba llamadas directas aunque no esté dentro de la pantalla de chat
   if (user?.id) {
     socket.join(user.id)
     console.log(`📡 ${user.alias} está a la escucha en su frecuencia personal.`)
@@ -30,11 +28,11 @@ export const registerChannelHandlers = (io: Server, socket: Socket) => {
     console.log(`🔇 ${user?.alias} salió del canal ${channelId}`)
   })
 
-  // 3. PTT (Push To Talk)
+  // 3. PTT (Push To Talk) - Opcional con WebRTC, pero útil para la UI
   socket.on('ptt-start', (channelId: string) => {
     socket.to(channelId).emit('ptt-status', {
       userId: user?.id,
-      alias: user?.alias, // Cambiado de username a alias
+      alias: user?.alias,
       isTalking: true,
     })
   })
@@ -47,18 +45,32 @@ export const registerChannelHandlers = (io: Server, socket: Socket) => {
     })
   })
 
-  // 4. STREAM DE VOZ
-  socket.on('voice-stream', (payload: { channelId: string; audioChunk: ArrayBuffer }) => {
-    const { channelId, audioChunk } = payload
+  // ==========================================
+  // 🌟 4. NUEVO: SEÑALIZACIÓN WEBRTC (P2P)
+  // ==========================================
 
-    if (!socket.rooms.has(channelId)) {
-      console.warn(`⚠️ Compa ${user?.alias} intentó transmitir sin unirse al canal.`)
-      return
-    }
-
-    socket.to(channelId).emit('voice-stream', {
+  // A. El Usuario 1 inicia la transmisión y envía una "Oferta"
+  socket.on('webrtc-offer', (payload: { channelId: string; offer: any }) => {
+    socket.to(payload.channelId).emit('webrtc-offer', {
       userId: user?.id,
-      audioChunk: audioChunk,
+      alias: user?.alias,
+      offer: payload.offer,
+    })
+  })
+
+  // B. El Usuario 2 recibe la oferta y responde con una "Respuesta"
+  socket.on('webrtc-answer', (payload: { channelId: string; answer: any }) => {
+    socket.to(payload.channelId).emit('webrtc-answer', {
+      userId: user?.id,
+      answer: payload.answer,
+    })
+  })
+
+  // C. Ambos usuarios intercambian posibles rutas de conexión (Candidatos ICE)
+  socket.on('webrtc-ice-candidate', (payload: { channelId: string; candidate: any }) => {
+    socket.to(payload.channelId).emit('webrtc-ice-candidate', {
+      userId: user?.id,
+      candidate: payload.candidate,
     })
   })
 }
