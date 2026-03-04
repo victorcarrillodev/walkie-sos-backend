@@ -74,17 +74,30 @@ export class ChannelService {
 
   // 5. NUEVO: Unirse a un canal por su nombre exacto
   async joinChannelByName(channelName: string, userId: string) {
-    // Buscamos si existe un canal con ese nombre (que no sea privado)
+    // Buscar canal por nombre sin importar si es privado o público
     const channel = await prisma.channel.findFirst({
       where: {
         name: channelName,
-        isPrivate: false,
+        // Removemos el filtro isPrivate: false
       },
     })
 
-    if (!channel) throw new Error('El canal no existe o es privado, mi compa.')
+    if (!channel) throw new Error('El canal no existe, mi compa.')
 
-    // Si existe, agregamos al usuario que lo buscó
+    // Verificar si ya es miembro
+    const existingMember = await prisma.channelMember.findUnique({
+      where: {
+        userId_channelId: {
+          userId: userId,
+          channelId: channel.id,
+        },
+      },
+    })
+
+    if (existingMember) {
+      throw new Error('Ya eres miembro de este grupo.')
+    }
+
     return await prisma.channelMember.create({
       data: {
         channelId: channel.id,
