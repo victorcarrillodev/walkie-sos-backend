@@ -73,4 +73,16 @@ export const registerChannelHandlers = (io: Server, socket: Socket) => {
       candidate: payload.candidate,
     })
   })
+  // ==========================================
+  // 🎙️ 5. NUEVO: ENVÍO DE AUDIO POR SOCKETS
+  // ==========================================
+  socket.on('send-audio', (payload: { channelId: string; audioData: string }) => {
+    // Reenviamos el audio a todos en el canal (excepto al que lo envió)
+    socket.to(payload.channelId).emit('receive-audio', {
+      userId: user?.id,
+      alias: user?.alias,
+      audioData: payload.audioData,
+    })
+    console.log(`🔊 ${user?.alias} envió un mensaje de voz al canal ${payload.channelId}`)
+  })
 }
