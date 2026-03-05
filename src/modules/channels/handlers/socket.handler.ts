@@ -7,39 +7,73 @@ export const registerChannelHandlers = (io: Server, socket: Socket) => {
 
   if (user?.id) {
     socket.join(user.id)
-    console.log(`📡 [${user.alias}] conectado y listo para recibir audio.`)
+    console.log(`📡 [${user.alias}] conectado`)
   }
 
   socket.on('join-channel', (channelId: string) => {
     socket.join(channelId)
-    console.log(`📻 [${user?.alias}] sintonizó la frecuencia: ${channelId}`)
+    console.log(`📻 [${user?.alias}] sintonizó: ${channelId}`)
+    socket.to(channelId).emit('channel-event', {
+      type: 'JOINED',
+      message: `${user?.alias} se unió`,
+      userId: user?.id,
+    })
   })
 
-  // ==========================================
-  // 🎙️ NUEVA LÓGICA DE AUDIO CON DEBUG
-  // ==========================================
-  socket.on('send-audio', (payload: { channelId: string; audioData: string }) => {
-    // 1. Este log nos dirá si el paquete llegó al servidor
-    console.log(`🚀 RECIBIENDO AUDIO de ${user?.alias} (${payload.audioData.length} bytes)`)
+  socket.on('leave-channel', (channelId: string) => {
+    socket.leave(channelId)
+  })
 
-    // 2. Reenviamos el audio
+  socket.on('ptt-start', (channelId: string) => {
+    console.log(`🎙️ PTT START: ${user?.alias}`)
+    socket.to(channelId).emit('ptt-status', {
+      userId: user?.id,
+      alias: user?.alias,
+      isTalking: true,
+    })
+  })
+
+  socket.on('ptt-end', (channelId: string) => {
+    console.log(`🔇 PTT END: ${user?.alias}`)
+    socket.to(channelId).emit('ptt-status', {
+      userId: user?.id,
+      alias: user?.alias,
+      isTalking: false,
+    })
+  })
+
+  // WebRTC señalización
+  socket.on('webrtc-offer', (payload: { channelId: string; offer: any }) => {
+    console.log(`📤 Offer de ${user?.alias} → canal ${payload.channelId}`)
+    socket.to(payload.channelId).emit('webrtc-offer', {
+      userId: user?.id,
+      alias: user?.alias,
+      offer: payload.offer,
+    })
+  })
+
+  socket.on('webrtc-answer', (payload: { channelId: string; answer: any }) => {
+    console.log(`📥 Answer de ${user?.alias} → canal ${payload.channelId}`)
+    socket.to(payload.channelId).emit('webrtc-answer', {
+      userId: user?.id,
+      answer: payload.answer,
+    })
+  })
+
+  socket.on('webrtc-ice-candidate', (payload: { channelId: string; candidate: any }) => {
+    socket.to(payload.channelId).emit('webrtc-ice-candidate', {
+      userId: user?.id,
+      candidate: payload.candidate,
+    })
+  })
+
+  // Audio por socket (backup + historial)
+  socket.on('send-audio', (payload: { channelId: string; audioData: string }) => {
+    console.log(`🔊 Audio de ${user?.alias} (${payload.audioData.length} chars)`)
     socket.to(payload.channelId).emit('receive-audio', {
       userId: user?.id,
       alias: user?.alias,
       audioData: payload.audioData,
     })
-
-    // 3. Confirmación de reenvío
-    console.log(`🔊 REENVIADO: Audio de ${user?.alias} enviado al canal ${payload.channelId}`)
-  })
-
-  socket.on('ptt-start', (channelId: string) => {
-    console.log(`🎙️ PTT START: ${user?.alias} presionó el botón`)
-    socket.to(channelId).emit('ptt-status', { userId: user?.id, isTalking: true })
-  })
-
-  socket.on('ptt-end', (channelId: string) => {
-    console.log(`🔇 PTT END: ${user?.alias} soltó el botón`)
-    socket.to(channelId).emit('ptt-status', { userId: user?.id, isTalking: false })
   })
 }
