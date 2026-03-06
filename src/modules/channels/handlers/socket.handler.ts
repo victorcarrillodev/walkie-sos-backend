@@ -68,8 +68,14 @@ export const registerChannelHandlers = (io: Server, socket: Socket) => {
   })
 
   // Audio por socket (backup + historial)
-  socket.on('send-audio', (payload: { channelId: string; audioData: string }) => {
-    console.log(`🔊 Audio de ${user?.alias} (${payload.audioData.length} chars)`)
+  socket.on('send-audio', (...args: any[]) => {
+    console.log(`🔊 send-audio args:`, JSON.stringify(args).substring(0, 200))
+    const payload = args[0]
+    if (!payload?.channelId || !payload?.audioData) {
+      console.log(`❌ Payload inválido:`, payload)
+      return
+    }
+    console.log(`🔊 Audio de ${user?.alias} → canal ${payload.channelId} (${payload.audioData.length} chars)`)
     socket.to(payload.channelId).emit('receive-audio', {
       userId: user?.id,
       alias: user?.alias,
