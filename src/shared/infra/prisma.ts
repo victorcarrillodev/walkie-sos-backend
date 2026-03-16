@@ -20,7 +20,7 @@ const prismaClientSingleton = () => {
   })
 
   // Crear el adaptador
-  const adapter = new PrismaPg(pool)
+  const adapter = new PrismaPg(pool as any)
 
   // Inicializar Prisma con el adaptador
   return new PrismaClient({
