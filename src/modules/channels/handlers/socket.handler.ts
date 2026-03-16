@@ -83,15 +83,24 @@ export const registerChannelHandlers = (io: Server, socket: Socket) => {
     })
   })
 
-  // Consulta manual de estado en línea
+  // Consulta manual de estado en línea (un usuario)
   socket.on('check-online-status', async (targetUserId: string) => {
-    // Busca si ese userId está en los rooms (socketio usa el socket.id o el room del user.id)
-    // En la línea 9 hacemos socket.join(user.id)
     const socketsInRoom = await io.in(targetUserId).fetchSockets()
     const isOnline = socketsInRoom.length > 0
     socket.emit('online-status', {
       userId: targetUserId,
       isOnline,
     })
+  })
+
+  // Consulta masiva de estado en línea (múltiples usuarios)
+  socket.on('check-users-status', async (userIds: string[]) => {
+    if (!Array.isArray(userIds)) return
+    const results: { userId: string; isOnline: boolean }[] = []
+    for (const userId of userIds) {
+      const socketsInRoom = await io.in(userId).fetchSockets()
+      results.push({ userId, isOnline: socketsInRoom.length > 0 })
+    }
+    socket.emit('users-status', results)
   })
 }
