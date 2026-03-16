@@ -45,6 +45,14 @@ io.on('connection', (socket: Socket) => {
   // Log de conexión exitosa
   Logger.info(`✅ Conectado: ${user?.alias} (ID: ${user?.id})`)
 
+  // Avisar a todos que el usuario se conectó
+  if (user?.id) {
+    socket.broadcast.emit('user-status-changed', {
+      userId: user.id,
+      isOnline: true,
+    })
+  }
+
   // ---------------------------------------------------------
   // CARGA DE MÓDULOS
   // ---------------------------------------------------------
@@ -60,6 +68,14 @@ io.on('connection', (socket: Socket) => {
   // Evento global de desconexión
   socket.on('disconnect', (reason) => {
     Logger.info(`❌ Desconectado: ${user?.alias} (Razón: ${reason})`)
+    
+    // Avisar a todos que el usuario se desconectó
+    if (user?.id) {
+      socket.broadcast.emit('user-status-changed', {
+        userId: user.id,
+        isOnline: false,
+      })
+    }
   })
 })
 

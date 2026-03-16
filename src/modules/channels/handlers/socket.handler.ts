@@ -82,4 +82,16 @@ export const registerChannelHandlers = (io: Server, socket: Socket) => {
       audioData: payload.audioData,
     })
   })
+
+  // Consulta manual de estado en línea
+  socket.on('check-online-status', async (targetUserId: string) => {
+    // Busca si ese userId está en los rooms (socketio usa el socket.id o el room del user.id)
+    // En la línea 9 hacemos socket.join(user.id)
+    const socketsInRoom = await io.in(targetUserId).fetchSockets()
+    const isOnline = socketsInRoom.length > 0
+    socket.emit('online-status', {
+      userId: targetUserId,
+      isOnline,
+    })
+  })
 }
