@@ -54,6 +54,7 @@ model Channel {
   name        String
   description String?
   isPrivate   Boolean  @default(false)
+  isMuted     Boolean  @default(false) // NUEVO: Si true, solo admins pueden hablar
   isGroup     Boolean  @default(true) // NUEVO: Para diferenciar 1-a-1 de Grupos grandes
   accessKey   String?  
   
@@ -74,6 +75,7 @@ model ChannelMember {
   channelId String
   role      MemberRole @default(USER) // ADMIN, USER, MODERATOR
   joinedAt  DateTime   @default(now())
+  mutedUntil DateTime? // NUEVO: Penalizado hasta esta fecha (null = sin penalización)
 
   user      User     @relation(fields: [userId], references: [id])
   channel   Channel  @relation(fields: [channelId], references: [id])

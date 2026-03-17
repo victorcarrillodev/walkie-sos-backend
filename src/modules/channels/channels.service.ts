@@ -106,4 +106,84 @@ export class ChannelService {
       },
     })
   }
+
+  // 6. NUEVO: Obtener miembros de un canal
+  async getChannelMembers(channelId: string) {
+    return await prisma.channelMember.findMany({
+      where: { channelId },
+      include: {
+        user: { select: { id: true, alias: true, firstName: true } }
+      },
+      orderBy: { joinedAt: 'asc' }
+    })
+  }
+
+  // 7. NUEVO: Silenciar/desilenciar canal completo
+  async toggleMuteChannel(channelId: string, requesterId: string, isMuted: boolean) {
+    await this.verifyAdmin(channelId, requesterId)
+
+    return await prisma.channel.update({
+      where: { id: channelId },
+      data: { isMuted }
+    })
+  }
+
+  // 8. NUEVO: Penalizar a un miembro
+  async penalizeMember(channelId: string, targetUserId: string, requesterId: string, minutes: number | null) {
+    await this.verifyAdmin(channelId, requesterId)
+
+    // No se puede penalizar al dueño o a otro admin (por simplicidad, verificamos que no sea el mismo requester)
+    if (targetUserId === requesterId) {
+      throw new Error('No te puedes penalizar a ti mismo compa.')
+    }
+
+    let mutedUntil = null
+    if (minutes !== null && minutes > 0) {
+      mutedUntil = new Date(Date.now() + minutes * 60000)
+    }
+
+    // Buscamos al miembro a penalizar
+    const targetMember = await prisma.channelMember.findUnique({
+      where: { userId_channelId: { userId: targetUserId, channelId: channelId } }
+    })
+
+    if (!targetMember) throw new Error('El usuario no está en este grupo.')
+    if (targetMember.role === MemberRole.ADMIN) throw new Error('No puedes penalizar a otro admin.')
+
+    return await prisma.channelMember.update({
+      where: { id: targetMember.id },
+      data: { mutedUntil }
+    })
+  }
+
+  // 9. NUEVO: Eliminar grupo
+  async deleteChannel(channelId: string, requesterId: string) {
+    const channel = await prisma.channel.findUnique({
+      where: { id: channelId },
+      include: { members: true }
+    })
+
+    if (!channel) throw new Error('El canal no existe.')
+
+    // Solo el dueño puede eliminar el grupo
+    if (channel.ownerId !== requesterId) {
+      throw new Error('Solo el dueño puede destruir el grupo.')
+    }
+
+    // Prisma eliminará en cascada los miembros si está configurado, o los borramos a mano por si acaso
+    await prisma.channelMember.deleteMany({ where: { channelId } })
+    await prisma.channel.delete({ where: { id: channelId } })
+    return { success: true }
+  }
+
+  // --- Helpers ---
+  private async verifyAdmin(channelId: string, requesterId: string) {
+    const member = await prisma.channelMember.findUnique({
+      where: { userId_channelId: { userId: requesterId, channelId: channelId } }
+    })
+
+    if (!member) throw new Error('No perteneces a este grupo.')
+    if (member.role !== MemberRole.ADMIN) throw new Error('Puro administrador puede hacer esto, mijo.')
+    return member
+  }
 }

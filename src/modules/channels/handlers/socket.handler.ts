@@ -1,5 +1,36 @@
 import { Server, Socket } from 'socket.io'
 import { AuthenticatedSocket } from '../../../shared/middlewares/auth.socket'
+import { prisma } from '../../../shared/infra/prisma'
+import { MemberRole } from '@prisma/client'
+
+// Helper para verificar permisos de voz
+const canUserTalk = async (channelId: string, userId: string): Promise<{ allowed: boolean; reason?: string }> => {
+  const channel = await prisma.channel.findUnique({
+    where: { id: channelId },
+    include: {
+      members: {
+        where: { userId }
+      }
+    }
+  })
+
+  if (!channel) return { allowed: false, reason: 'El canal no existe.' }
+
+  const member = channel.members[0]
+  if (!member) return { allowed: false, reason: 'No perteneces a este grupo.' }
+
+  // Si tiene penalización por tiempo
+  if (member.mutedUntil && member.mutedUntil > new Date()) {
+    return { allowed: false, reason: 'Estás penalizado o silenciado temporalmente.' }
+  }
+
+  // Si el grupo está silenciado y no es admin
+  if (channel.isMuted && member.role !== MemberRole.ADMIN) {
+    return { allowed: false, reason: 'El administrador ha silenciado este grupo.' }
+  }
+
+  return { allowed: true }
+}
 
 export const registerChannelHandlers = (io: Server, socket: Socket) => {
   const authSocket = socket as AuthenticatedSocket
@@ -24,7 +55,15 @@ export const registerChannelHandlers = (io: Server, socket: Socket) => {
     socket.leave(channelId)
   })
 
-  socket.on('ptt-start', (channelId: string) => {
+  socket.on('ptt-start', async (channelId: string) => {
+    if (!user?.id) return
+
+    const check = await canUserTalk(channelId, user.id)
+    if (!check.allowed) {
+      socket.emit('talk-error', { message: check.reason })
+      return
+    }
+
     console.log(`🎙️ PTT START: ${user?.alias}`)
     socket.to(channelId).emit('ptt-status', {
       userId: user?.id,
@@ -68,13 +107,19 @@ export const registerChannelHandlers = (io: Server, socket: Socket) => {
   })
 
   // Audio por socket (backup + historial)
-  socket.on('send-audio', (...args: any[]) => {
-    console.log(`🔊 send-audio args:`, JSON.stringify(args).substring(0, 200))
+  socket.on('send-audio', async (...args: any[]) => {
+    if (!user?.id) return
+
     const payload = args[0]
     if (!payload?.channelId || !payload?.audioData) {
       console.log(`❌ Payload inválido:`, payload)
       return
     }
+
+    // Doble check por si lograron bypassear el ptt-start
+    const check = await canUserTalk(payload.channelId, user.id)
+    if (!check.allowed) return
+
     console.log(`🔊 Audio de ${user?.alias} → canal ${payload.channelId} (${payload.audioData.length} chars)`)
     socket.to(payload.channelId).emit('receive-audio', {
       userId: user?.id,

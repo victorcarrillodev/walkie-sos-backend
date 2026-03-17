@@ -21,6 +21,14 @@ const joinByNameSchema = z.object({
   name: z.string().min(1, 'El nombre del canal es obligatorio'),
 })
 
+const toggleMuteSchema = z.object({
+  isMuted: z.boolean(),
+})
+
+const penalizeMemberSchema = z.object({
+  minutes: z.number().nullable(), // null para quitar castigo
+})
+
 export const create = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const userId = req.user!.id
@@ -94,6 +102,55 @@ export const joinChannel = async (req: AuthenticatedRequest, res: Response): Pro
       res.status(400).json({ error: error.issues.map((e) => e.message).join(', ') })
       return
     }
+    res.status(400).json({ error: error.message })
+  }
+}
+
+export const getMembers = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const channelId = req.params.channelId as string
+    const members = await channelService.getChannelMembers(channelId)
+    res.json(members)
+  } catch (error: any) {
+    res.status(400).json({ error: error.message })
+  }
+}
+
+export const toggleMute = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const requesterId = req.user!.id
+    const channelId = req.params.channelId as string
+    const data = toggleMuteSchema.parse(req.body)
+
+    const updated = await channelService.toggleMuteChannel(channelId, requesterId, data.isMuted)
+    res.json({ message: data.isMuted ? 'Grupo silenciado' : 'Grupo desilenciado', channel: updated })
+  } catch (error: any) {
+    res.status(400).json({ error: error.message })
+  }
+}
+
+export const penalize = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const requesterId = req.user!.id
+    const channelId = req.params.channelId as string
+    const targetUserId = req.params.userId as string
+    const data = penalizeMemberSchema.parse(req.body)
+
+    await channelService.penalizeMember(channelId, targetUserId, requesterId, data.minutes)
+    res.json({ message: data.minutes ? `Usuario penalizado por ${data.minutes} minutos.` : 'Penalización retirada.' })
+  } catch (error: any) {
+    res.status(400).json({ error: error.message })
+  }
+}
+
+export const destroy = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const requesterId = req.user!.id
+    const channelId = req.params.channelId as string
+
+    await channelService.deleteChannel(channelId, requesterId)
+    res.json({ message: 'Grupo destruido exitosamente.' })
+  } catch (error: any) {
     res.status(400).json({ error: error.message })
   }
 }
