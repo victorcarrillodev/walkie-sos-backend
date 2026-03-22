@@ -11,6 +11,7 @@ export const registerAlertHandlers = (io: Server, socket: Socket) => {
     'send-alert',
     async (payload: {
       channelId: string
+      isGroup?: boolean
       lat: number
       lng: number
       type: 'THEFT' | 'PANIC' | 'MEDICAL' | 'SUSPICIOUS'
@@ -26,7 +27,8 @@ export const registerAlertHandlers = (io: Server, socket: Socket) => {
             latitude: payload.lat,
             longitude: payload.lng,
             userId: user!.id,
-            channelId: payload.channelId,
+            // Si es grupo lo guardamos. Si es un ID de usuario directo (isGroup = false u omitido por seguridad si no parece UUID del grupo), guardamos nulo.
+            channelId: payload.isGroup ? payload.channelId : undefined,
             status: 'ACTIVE',
           },
         })
