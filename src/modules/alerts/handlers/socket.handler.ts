@@ -27,8 +27,8 @@ export const registerAlertHandlers = (io: Server, socket: Socket) => {
             latitude: payload.lat,
             longitude: payload.lng,
             userId: user!.id,
-            // Si es grupo lo guardamos. Si es un ID de usuario directo (isGroup = false u omitido por seguridad si no parece UUID del grupo), guardamos nulo.
             channelId: payload.isGroup ? payload.channelId : undefined,
+            targetUserId: !payload.isGroup ? payload.channelId : undefined,
             status: 'ACTIVE',
           },
         })
@@ -78,6 +78,41 @@ export const registerAlertHandlers = (io: Server, socket: Socket) => {
       io.to(payload.channelId).emit('alert-resolved', { alertId: payload.alertId })
     } catch (error) {
       console.error('Error resolviendo alerta:', error)
+    }
+  })
+
+  // 4. OBTENER HISTORIAL DE ALERTAS
+  socket.on('get-alerts-history', async (callback?: (data: any) => void) => {
+    try {
+      if (!user?.id) return
+
+      // Obtenemos los canales a los que pertenece para incluir las alertas grupales
+      const userChannels = await prisma.channelMember.findMany({
+         where: { userId: user.id },
+         select: { channelId: true }
+      })
+      const channelIds = userChannels.map(c => c.channelId)
+
+      const alerts = await prisma.alert.findMany({
+        where: {
+          OR: [
+             { userId: user.id },
+             { targetUserId: user.id },
+             { channelId: { in: channelIds } }
+          ]
+        },
+        orderBy: { createdAt: 'desc' },
+        include: {
+           user: { select: { alias: true, id: true } },
+           targetUser: { select: { alias: true, id: true } },
+           channel: { select: { name: true, id: true } }
+        }
+      })
+      
+      if (callback) callback({ success: true, alerts })
+    } catch (e) {
+      console.error('Error obteniendo historial de alertas:', e)
+      if (callback) callback({ success: false, error: 'Error al obtener alertas' })
     }
   })
 }

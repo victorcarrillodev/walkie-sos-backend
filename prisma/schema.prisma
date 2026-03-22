@@ -26,6 +26,7 @@ model User {
   ownedChannels   Channel[]       @relation("OwnerChannels")
   memberships     ChannelMember[]
   alertsSent      Alert[]
+  alertsReceived  Alert[]         @relation("AlertsReceived")
   
   // Relaciones para el historial de contactos
   contacts        Contact[]       @relation("UserContacts")
@@ -98,6 +99,9 @@ model Alert {
 
   channelId String?
   channel   Channel? @relation(fields: [channelId], references: [id])
+
+  targetUserId String?
+  targetUser   User?    @relation("AlertsReceived", fields: [targetUserId], references: [id])
 
   createdAt DateTime @default(now())
   resolvedAt DateTime?
