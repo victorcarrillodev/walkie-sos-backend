@@ -130,9 +130,8 @@ export class ChannelService {
 
   // 8. NUEVO: Penalizar a un miembro
   async penalizeMember(channelId: string, targetUserId: string, requesterId: string, minutes: number | null) {
-    await this.verifyAdmin(channelId, requesterId)
+    const requesterMember = await this.verifyAdminOrModerator(channelId, requesterId)
 
-    // No se puede penalizar al dueño o a otro admin (por simplicidad, verificamos que no sea el mismo requester)
     if (targetUserId === requesterId) {
       throw new Error('No te puedes penalizar a ti mismo compa.')
     }
@@ -148,11 +147,39 @@ export class ChannelService {
     })
 
     if (!targetMember) throw new Error('El usuario no está en este grupo.')
-    if (targetMember.role === MemberRole.ADMIN) throw new Error('No puedes penalizar a otro admin.')
+    
+    // Reglas de jerarquía
+    if (targetMember.role === MemberRole.ADMIN) {
+      throw new Error('No puedes penalizar a un Administrador.')
+    }
+    if (requesterMember.role === MemberRole.MODERATOR && targetMember.role === MemberRole.MODERATOR) {
+      throw new Error('Un Moderador no puede penalizar a otro Moderador.')
+    }
 
     return await prisma.channelMember.update({
       where: { id: targetMember.id },
       data: { mutedUntil }
+    })
+  }
+
+  // 8.5 NUEVO: Cambiar rol de un miembro
+  async changeMemberRole(channelId: string, targetUserId: string, requesterId: string, newRole: MemberRole) {
+    await this.verifyAdmin(channelId, requesterId)
+
+    if (targetUserId === requesterId) {
+      throw new Error('No te puedes cambiar el rol a ti mismo (eres el patrón).')
+    }
+
+    const targetMember = await prisma.channelMember.findUnique({
+      where: { userId_channelId: { userId: targetUserId, channelId: channelId } }
+    })
+
+    if (!targetMember) throw new Error('El usuario no está en este grupo.')
+    if (targetMember.role === MemberRole.ADMIN) throw new Error('No puedes modificar a otro administrador.')
+
+    return await prisma.channelMember.update({
+      where: { id: targetMember.id },
+      data: { role: newRole }
     })
   }
 
@@ -184,6 +211,18 @@ export class ChannelService {
 
     if (!member) throw new Error('No perteneces a este grupo.')
     if (member.role !== MemberRole.ADMIN) throw new Error('Puro administrador puede hacer esto, mijo.')
+    return member
+  }
+
+  private async verifyAdminOrModerator(channelId: string, requesterId: string) {
+    const member = await prisma.channelMember.findUnique({
+      where: { userId_channelId: { userId: requesterId, channelId: channelId } }
+    })
+
+    if (!member) throw new Error('No perteneces a este grupo.')
+    if (member.role !== MemberRole.ADMIN && member.role !== MemberRole.MODERATOR) {
+      throw new Error('Solo los Administradores o Moderadores pueden hacer esto.')
+    }
     return member
   }
 }

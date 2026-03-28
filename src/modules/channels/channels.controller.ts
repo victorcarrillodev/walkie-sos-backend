@@ -29,6 +29,10 @@ const penalizeMemberSchema = z.object({
   minutes: z.number().nullable(), // null para quitar castigo
 })
 
+const changeRoleSchema = z.object({
+  role: z.enum(['MODERATOR', 'USER']),
+})
+
 export const create = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const userId = req.user!.id
@@ -139,6 +143,24 @@ export const penalize = async (req: AuthenticatedRequest, res: Response): Promis
     await channelService.penalizeMember(channelId, targetUserId, requesterId, data.minutes)
     res.json({ message: data.minutes ? `Usuario penalizado por ${data.minutes} minutos.` : 'Penalización retirada.' })
   } catch (error: any) {
+    res.status(400).json({ error: error.message })
+  }
+}
+
+export const changeRole = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const requesterId = req.user!.id
+    const channelId = req.params.channelId as string
+    const targetUserId = req.params.userId as string
+    const data = changeRoleSchema.parse(req.body)
+
+    const updatedMember = await channelService.changeMemberRole(channelId, targetUserId, requesterId, data.role as any)
+    res.json({ message: `Rol actualizado a ${data.role}`, member: updatedMember })
+  } catch (error: any) {
+    if (error instanceof z.ZodError) {
+      res.status(400).json({ error: error.issues.map((e) => e.message).join(', ') })
+      return
+    }
     res.status(400).json({ error: error.message })
   }
 }

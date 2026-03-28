@@ -1,5 +1,5 @@
 import { Router } from 'express'
-import { create, listMyChannels, getPublic, addMember, joinChannel, getMembers, toggleMute, penalize, destroy } from './channels.controller'
+import { create, listMyChannels, getPublic, addMember, joinChannel, getMembers, toggleMute, penalize, changeRole, destroy } from './channels.controller'
 import { authMiddleware } from '../../shared/middlewares/auth.middleware'
 
 const router = Router()
@@ -17,6 +17,7 @@ router.post('/:channelId/members', addMember) // Meter a un compa a un grupo
 router.get('/:channelId/members', getMembers) // Listar miembros
 router.patch('/:channelId/mute', toggleMute) // Silenciar/desilenciar grupo
 router.patch('/:channelId/members/:userId/penalize', penalize) // Penalizar o quitar castigo
+router.patch('/:channelId/members/:userId/role', changeRole) // Cambiar rol (ADMIN a MODERADOR)
 router.delete('/:channelId', destroy) // Eliminar grupo
 
 export default router
