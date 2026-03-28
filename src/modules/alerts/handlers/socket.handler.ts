@@ -82,7 +82,10 @@ export const registerAlertHandlers = (io: Server, socket: Socket) => {
   })
 
   // 4. OBTENER HISTORIAL DE ALERTAS
-  socket.on('get-alerts-history', async (callback?: (data: any) => void) => {
+  socket.on('get-alerts-history', async (data: any, callback?: (data: any) => void) => {
+    if (typeof data === 'function') {
+      callback = data
+    }
     try {
       if (!user?.id) return
 
