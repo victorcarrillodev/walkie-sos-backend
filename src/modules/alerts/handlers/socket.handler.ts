@@ -81,6 +81,24 @@ export const registerAlertHandlers = (io: Server, socket: Socket) => {
     }
   })
 
+  // 3.5 CANCELAR ALERTA (Falsa alarma o cancelada por el usuario)
+  socket.on('cancel-alert', async (payload: { alertId: string; channelId?: string }) => {
+    try {
+      await prisma.alert.update({
+        where: { id: payload.alertId },
+        data: { status: 'DISMISSED', resolvedAt: new Date() },
+      })
+
+      console.log(`❌ Alerta ${payload.alertId} cancelada por ${user?.alias}`)
+
+      if (payload.channelId) {
+        io.to(payload.channelId).emit('alert-resolved', { alertId: payload.alertId })
+      }
+    } catch (error) {
+      console.error('Error cancelando alerta:', error)
+    }
+  })
+
   // 4. OBTENER HISTORIAL DE ALERTAS
   socket.on('get-alerts-history', async (data: any, callback?: (data: any) => void) => {
     if (typeof data === 'function') {
