@@ -1,0 +1,10 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const alerts_controller_1 = require("./alerts.controller");
+const auth_middleware_1 = require("../../shared/middlewares/auth.middleware");
+const router = (0, express_1.Router)();
+router.use(auth_middleware_1.authMiddleware);
+router.get('/channel/:channelId/active', alerts_controller_1.getActiveAlerts);
+router.get('/history', alerts_controller_1.getMyHistory);
+exports.default = router;

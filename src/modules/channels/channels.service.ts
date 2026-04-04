@@ -44,12 +44,9 @@ export class ChannelService {
     })
   }
 
-  // 3. Buscar canales públicos (para unirse)
+  // 3. Buscar canales públicos (para unirse) - OBSOLETO, ya no existen canales públicos sin contraseña
   async getPublicChannels() {
-    return await prisma.channel.findMany({
-      where: { isPrivate: false },
-      take: 20,
-    })
+    return []
   }
 
   // 4. Agregar compa al canal
