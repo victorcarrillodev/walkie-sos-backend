@@ -82,7 +82,11 @@ export const registerChannelHandlers = (io: Server, socket: Socket) => {
   })
 
   // WebRTC señalización
-  socket.on('webrtc-offer', (payload: { channelId: string; offer: any }) => {
+  socket.on('webrtc-offer', async (payload: { channelId: string; offer: any }) => {
+    if (!user?.id) return
+    const check = await canUserTalk(payload.channelId, user.id)
+    if (!check.allowed) return
+
     console.log(`📤 Offer de ${user?.alias} → canal ${payload.channelId}`)
     socket.to(payload.channelId).emit('webrtc-offer', {
       userId: user?.id,
@@ -91,7 +95,11 @@ export const registerChannelHandlers = (io: Server, socket: Socket) => {
     })
   })
 
-  socket.on('webrtc-answer', (payload: { channelId: string; answer: any }) => {
+  socket.on('webrtc-answer', async (payload: { channelId: string; answer: any }) => {
+    if (!user?.id) return
+    const check = await canUserTalk(payload.channelId, user.id)
+    if (!check.allowed) return
+
     console.log(`📥 Answer de ${user?.alias} → canal ${payload.channelId}`)
     socket.to(payload.channelId).emit('webrtc-answer', {
       userId: user?.id,
@@ -99,7 +107,11 @@ export const registerChannelHandlers = (io: Server, socket: Socket) => {
     })
   })
 
-  socket.on('webrtc-ice-candidate', (payload: { channelId: string; candidate: any }) => {
+  socket.on('webrtc-ice-candidate', async (payload: { channelId: string; candidate: any }) => {
+    if (!user?.id) return
+    const check = await canUserTalk(payload.channelId, user.id)
+    if (!check.allowed) return
+
     socket.to(payload.channelId).emit('webrtc-ice-candidate', {
       userId: user?.id,
       candidate: payload.candidate,
