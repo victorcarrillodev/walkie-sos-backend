@@ -52,12 +52,12 @@ model Contact {
 // Actúa como "Grupos" donde puede haber Admins o Miembros
 model Channel {
   id          String   @id @default(uuid())
-  name        String
+  name        String   @unique
   description String?
-  isPrivate   Boolean  @default(false)
+  password    String   
+  maxMessageDuration Int @default(60) // NUEVO: Duración en segundos
   isMuted     Boolean  @default(false) // NUEVO: Si true, solo admins pueden hablar
   isGroup     Boolean  @default(true) // NUEVO: Para diferenciar 1-a-1 de Grupos grandes
-  accessKey   String?  
   
   ownerId     String
   owner       User     @relation("OwnerChannels", fields: [ownerId], references: [id])

@@ -8,9 +8,9 @@ const channelService = new ChannelService()
 // Validaciones firmes con Zod
 const createGroupSchema = z.object({
   name: z.string().min(3, 'El nombre debe tener al menos 3 letras'),
+  password: z.string().min(1, 'La contraseña es obligatoria'),
   description: z.string().optional(),
-  isPrivate: z.boolean().optional(),
-  accessKey: z.string().optional(),
+  maxMessageDuration: z.number().optional(),
 })
 
 const addMemberSchema = z.object({
@@ -19,6 +19,7 @@ const addMemberSchema = z.object({
 
 const joinByNameSchema = z.object({
   name: z.string().min(1, 'El nombre del canal es obligatorio'),
+  password: z.string().min(1, 'La contraseña es obligatoria'),
 })
 
 const toggleMuteSchema = z.object({
@@ -31,6 +32,11 @@ const penalizeMemberSchema = z.object({
 
 const changeRoleSchema = z.object({
   role: z.enum(['MODERATOR', 'USER']),
+})
+
+const updateSettingsSchema = z.object({
+  password: z.string().optional(),
+  maxMessageDuration: z.number().optional(),
 })
 
 export const create = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
@@ -94,10 +100,9 @@ export const joinChannel = async (req: AuthenticatedRequest, res: Response): Pro
     const userId = req.user!.id
     const data = joinByNameSchema.parse(req.body)
 
-    const newMember = await channelService.joinChannelByName(data.name, userId)
-    res.status(200).json({ message: 'Te has unido al canal con éxito', member: newMember })
+    const newMember = await channelService.joinChannelByName(data.name, userId, data.password)
+    res.status(200).json({ message: 'Te has unido al grupo con éxito', member: newMember })
   } catch (error: any) {
-    // Si da el error P2002 de Prisma, significa que el usuario ya estaba en el grupo
     if (error.code === 'P2002') {
       res.status(400).json({ error: 'Ya eres miembro de este grupo.' })
       return
@@ -173,6 +178,23 @@ export const destroy = async (req: AuthenticatedRequest, res: Response): Promise
     await channelService.deleteChannel(channelId, requesterId)
     res.json({ message: 'Grupo destruido exitosamente.' })
   } catch (error: any) {
+    res.status(400).json({ error: error.message })
+  }
+}
+
+export const updateSettings = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const requesterId = req.user!.id
+    const channelId = req.params.channelId as string
+    const data = updateSettingsSchema.parse(req.body)
+
+    const updated = await channelService.updateChannelSettings(channelId, requesterId, data)
+    res.json({ message: 'Ajustes del grupo actualizados', channel: updated })
+  } catch (error: any) {
+    if (error instanceof z.ZodError) {
+      res.status(400).json({ error: error.issues.map((e) => e.message).join(', ') })
+      return
+    }
     res.status(400).json({ error: error.message })
   }
 }

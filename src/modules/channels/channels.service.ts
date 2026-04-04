@@ -5,15 +5,21 @@ export class ChannelService {
   // 1. Crear un nuevo canal
   async createChannel(
     userId: string,
-    data: { name: string; description?: string; isPrivate?: boolean; accessKey?: string },
+    data: { name: string; description?: string; password?: string; maxMessageDuration?: number },
   ) {
+    if (!data.password) throw new Error('La contraseña es obligatoria.')
+
+    // Verificar unicidad del nombre
+    const exists = await prisma.channel.findUnique({ where: { name: data.name } })
+    if (exists) throw new Error('Ya existe un grupo con ese nombre.')
+
     return await prisma.channel.create({
       data: {
         name: data.name,
         description: data.description,
-        isPrivate: data.isPrivate || false,
+        password: data.password,
+        maxMessageDuration: data.maxMessageDuration || 60,
         isGroup: true, // Asumimos que es grupo por defecto
-        accessKey: data.accessKey,
         ownerId: userId,
         members: {
           create: {
@@ -58,8 +64,8 @@ export class ChannelService {
     const requesterMember = channel.members.find((m: any) => m.userId === requesterId)
     if (!requesterMember) throw new Error('Tú ni estás en este grupo, no puedes invitar a nadie.')
 
-    if (channel.isPrivate && requesterMember.role === MemberRole.USER) {
-      throw new Error('Este grupo es privado. Solo los administradores pueden meter gente nueva.')
+    if (requesterMember.role === MemberRole.USER) {
+      throw new Error('Solo los administradores pueden meter gente nueva.')
     }
 
     return await prisma.channelMember.create({
@@ -72,17 +78,17 @@ export class ChannelService {
     })
   }
 
-  // 5. NUEVO: Unirse a un canal por su nombre exacto
-  async joinChannelByName(channelName: string, userId: string) {
-    // Buscar canal por nombre sin importar si es privado o público
-    const channel = await prisma.channel.findFirst({
-      where: {
-        name: channelName,
-        // Removemos el filtro isPrivate: false
-      },
+  // 5. NUEVO: Unirse a un canal por su nombre exacto y contraseña
+  async joinChannelByName(channelName: string, userId: string, passwordAttempt: string) {
+    const channel = await prisma.channel.findUnique({
+      where: { name: channelName },
     })
 
-    if (!channel) throw new Error('El canal no existe, mi compa.')
+    if (!channel) throw new Error('El grupo no existe.')
+
+    if (channel.password !== passwordAttempt) {
+      throw new Error('La contraseña es incorrecta.')
+    }
 
     // Verificar si ya es miembro
     const existingMember = await prisma.channelMember.findUnique({
@@ -125,6 +131,20 @@ export class ChannelService {
     return await prisma.channel.update({
       where: { id: channelId },
       data: { isMuted }
+    })
+  }
+
+  // 7.5 NUEVO: Actualizar ajustes del canal (contraseña, duración de msg)
+  async updateChannelSettings(channelId: string, requesterId: string, data: { password?: string; maxMessageDuration?: number }) {
+    await this.verifyAdmin(channelId, requesterId)
+
+    const updateData: any = {}
+    if (data.password) updateData.password = data.password
+    if (data.maxMessageDuration) updateData.maxMessageDuration = data.maxMessageDuration
+
+    return await prisma.channel.update({
+      where: { id: channelId },
+      data: updateData
     })
   }
 
