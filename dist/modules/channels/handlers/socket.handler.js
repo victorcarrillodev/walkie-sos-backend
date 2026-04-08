@@ -4,26 +4,39 @@ exports.registerChannelHandlers = void 0;
 const prisma_1 = require("../../../shared/infra/prisma");
 const client_1 = require("@prisma/client");
 const canUserTalk = async (channelId, userId) => {
-    const channel = await prisma_1.prisma.channel.findUnique({
-        where: { id: channelId },
-        include: {
-            members: {
-                where: { userId }
-            }
+    if (channelId.startsWith('direct_')) {
+        const parts = channelId.split('_');
+        if (parts.length >= 3 && (parts[1] === userId || parts[2] === userId)) {
+            return { allowed: true };
         }
-    });
-    if (!channel)
-        return { allowed: false, reason: 'El canal no existe.' };
-    const member = channel.members[0];
-    if (!member)
-        return { allowed: false, reason: 'No perteneces a este grupo.' };
-    if (member.mutedUntil && member.mutedUntil > new Date()) {
-        return { allowed: false, reason: 'Estás penalizado o silenciado temporalmente.' };
+        return { allowed: false, reason: 'No formas parte de esta charla directa.' };
     }
-    if (channel.isMuted && member.role !== client_1.MemberRole.ADMIN) {
-        return { allowed: false, reason: 'El administrador ha silenciado este grupo.' };
+    try {
+        const channel = await prisma_1.prisma.channel.findUnique({
+            where: { id: channelId },
+            include: {
+                members: {
+                    where: { userId },
+                },
+            },
+        });
+        if (!channel)
+            return { allowed: false, reason: 'El canal no existe.' };
+        const member = channel.members[0];
+        if (!member)
+            return { allowed: false, reason: 'No perteneces a este grupo.' };
+        if (member.mutedUntil && member.mutedUntil > new Date()) {
+            return { allowed: false, reason: 'Estás penalizado o silenciado temporalmente.' };
+        }
+        if (channel.isMuted && member.role !== client_1.MemberRole.ADMIN) {
+            return { allowed: false, reason: 'El administrador ha silenciado este grupo.' };
+        }
+        return { allowed: true };
     }
-    return { allowed: true };
+    catch (error) {
+        console.error('❌ Error en canUserTalk:', error);
+        return { allowed: false, reason: 'Error interno verificando permisos del grupo.' };
+    }
 };
 const registerChannelHandlers = (io, socket) => {
     const authSocket = socket;
@@ -54,6 +67,7 @@ const registerChannelHandlers = (io, socket) => {
         }
         console.log(`🎙️ PTT START: ${user?.alias}`);
         socket.to(channelId).emit('ptt-status', {
+            channelId: channelId,
             userId: user?.id,
             alias: user?.alias,
             isTalking: true,
@@ -62,6 +76,7 @@ const registerChannelHandlers = (io, socket) => {
     socket.on('ptt-end', (channelId) => {
         console.log(`🔇 PTT END: ${user?.alias}`);
         socket.to(channelId).emit('ptt-status', {
+            channelId: channelId,
             userId: user?.id,
             alias: user?.alias,
             isTalking: false,
@@ -75,6 +90,7 @@ const registerChannelHandlers = (io, socket) => {
             return;
         console.log(`📤 Offer de ${user?.alias} → canal ${payload.channelId}`);
         socket.to(payload.channelId).emit('webrtc-offer', {
+            channelId: payload.channelId,
             userId: user?.id,
             alias: user?.alias,
             offer: payload.offer,
@@ -88,6 +104,7 @@ const registerChannelHandlers = (io, socket) => {
             return;
         console.log(`📥 Answer de ${user?.alias} → canal ${payload.channelId}`);
         socket.to(payload.channelId).emit('webrtc-answer', {
+            channelId: payload.channelId,
             userId: user?.id,
             answer: payload.answer,
         });
@@ -99,6 +116,7 @@ const registerChannelHandlers = (io, socket) => {
         if (!check.allowed)
             return;
         socket.to(payload.channelId).emit('webrtc-ice-candidate', {
+            channelId: payload.channelId,
             userId: user?.id,
             candidate: payload.candidate,
         });
@@ -116,6 +134,7 @@ const registerChannelHandlers = (io, socket) => {
             return;
         console.log(`🔊 Audio de ${user?.alias} → canal ${payload.channelId} (${payload.audioData.length} chars)`);
         socket.to(payload.channelId).emit('receive-audio', {
+            channelId: payload.channelId,
             userId: user?.id,
             alias: user?.alias,
             audioData: payload.audioData,

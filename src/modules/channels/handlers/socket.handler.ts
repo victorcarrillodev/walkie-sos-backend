@@ -1,120 +1,156 @@
 import { Server, Socket } from 'socket.io'
 import { AuthenticatedSocket } from '../../../shared/middlewares/auth.socket'
 import { prisma } from '../../../shared/infra/prisma'
-export const registerAlertHandlers = (io: Server, socket: Socket) => {
+import { MemberRole } from '@prisma/client'
+// Helper para verificar permisos de voz
+const canUserTalk = async (channelId: string, userId: string): Promise<{ allowed: boolean; reason?: string }> => {
+  // Manejo de canales directos (virtuales, sin registro en base de datos)
+  if (channelId.startsWith('direct_')) {
+    const parts = channelId.split('_')
+    if (parts.length >= 3 && (parts[1] === userId || parts[2] === userId)) {
+      return { allowed: true }
+    }
+    return { allowed: false, reason: 'No formas parte de esta charla directa.' }
+  }
+  try {
+    const channel = await prisma.channel.findUnique({
+      where: { id: channelId },
+      include: {
+        members: {
+          where: { userId },
+        },
+      },
+    })
+    if (!channel) return { allowed: false, reason: 'El canal no existe.' }
+    const member = channel.members[0]
+    if (!member) return { allowed: false, reason: 'No perteneces a este grupo.' }
+    // Si tiene penalización por tiempo
+    if (member.mutedUntil && member.mutedUntil > new Date()) {
+      return { allowed: false, reason: 'Estás penalizado o silenciado temporalmente.' }
+    }
+    // Si el grupo está silenciado y no es admin
+    if (channel.isMuted && member.role !== MemberRole.ADMIN) {
+      return { allowed: false, reason: 'El administrador ha silenciado este grupo.' }
+    }
+    return { allowed: true }
+  } catch (error) {
+    console.error('❌ Error en canUserTalk:', error)
+    return { allowed: false, reason: 'Error interno verificando permisos del grupo.' }
+  }
+}
+export const registerChannelHandlers = (io: Server, socket: Socket) => {
   const authSocket = socket as AuthenticatedSocket
   const user = authSocket.user
-  // 1. EL GRITO DE GUERRA (Inicia la alerta y guarda el punto cero)
-  socket.on(
-    'send-alert',
-    async (payload: {
-      channelId: string
-      isGroup?: boolean
-      lat: number
-      lng: number
-      type: 'THEFT' | 'PANIC' | 'MEDICAL' | 'SUSPICIOUS'
-    }) => {
-      try {
-        // Corregido: Usamos 'alias', ya no 'username'
-        console.log(`🚨 ALERTA RECIBIDA del compa ${user?.alias}: ${payload.type}`)
-        // Guardar Alerta en Base de Datos (Historial)
-        const alert = await prisma.alert.create({
-          data: {
-            type: payload.type,
-            latitude: payload.lat,
-            longitude: payload.lng,
-            userId: user!.id,
-            channelId: payload.isGroup ? payload.channelId : undefined,
-            targetUserId: !payload.isGroup ? payload.channelId : undefined,
-            status: 'ACTIVE',
-          },
-        })
-        // Notificar en Tiempo Real a todos en el canal EXCEPTO el emisor
-        socket.to(payload.channelId).emit('emergency-alert', {
-          id: alert.id,
-          type: alert.type,
-          user: { id: user?.id, alias: user?.alias },
-          location: { lat: alert.latitude, lng: alert.longitude },
-          timestamp: alert.createdAt,
-        })
-        // VITAL: Le devolvemos el ID de la alerta al celular para que empiece a mandar su GPS
-        socket.emit('alert-created', { alertId: alert.id })
-      } catch (error) {
-        console.error('Error procesando alerta:', error)
-        socket.emit('error', { message: 'No se pudo enviar la alerta' })
-      }
-    },
-  )
-  // 2. EL RASTREO EN VIVO (Puro Socket, modo ráfaga)
-  // El celular va a disparar esto cada que el compa dé 5 pasos
-  socket.on('stream-location', (payload: { channelId: string; alertId: string; lat: number; lng: number }) => {
-    // Retransmitimos las coordenadas exactas a la tribu al instante
-    socket.to(payload.channelId).emit('live-location-update', {
-      alertId: payload.alertId,
+  if (user?.id) {
+    socket.join(user.id)
+    console.log(`📡 [${user.alias}] conectado`)
+  }
+  socket.on('join-channel', (channelId: string) => {
+    socket.join(channelId)
+    console.log(`📻 [${user?.alias}] sintonizó: ${channelId}`)
+    socket.to(channelId).emit('channel-event', {
+      type: 'JOINED',
+      message: `${user?.alias} se unió`,
       userId: user?.id,
-      location: { lat: payload.lat, lng: payload.lng },
-      timestamp: new Date().toISOString(),
     })
   })
-  // 3. APAGAR LA ALERTA (Cuando ya llegó la ayuda)
-  socket.on('resolve-alert', async (payload: { alertId: string; channelId: string }) => {
-    try {
-      // Actualizamos la base de datos para cerrar el evento
-      await prisma.alert.update({
-        where: { id: payload.alertId },
-        data: { status: 'RESOLVED', resolvedAt: new Date() },
-      })
-      console.log(`✅ Alerta ${payload.alertId} resuelta por ${user?.alias}`)
-      // Avisamos a todos para que cierren el mapa y apaguen las sirenas
-      io.to(payload.channelId).emit('alert-resolved', { alertId: payload.alertId })
-    } catch (error) {
-      console.error('Error resolviendo alerta:', error)
-    }
+  socket.on('leave-channel', (channelId: string) => {
+    socket.leave(channelId)
   })
-  // 3.5 CANCELAR ALERTA (Falsa alarma o cancelada por el usuario)
-  socket.on('cancel-alert', async (payload: { alertId: string; channelId?: string }) => {
-    try {
-      await prisma.alert.update({
-        where: { id: payload.alertId },
-        data: { status: 'DISMISSED', resolvedAt: new Date() },
-      })
-      console.log(`❌ Alerta ${payload.alertId} cancelada por ${user?.alias}`)
-      if (payload.channelId) {
-        io.to(payload.channelId).emit('alert-resolved', { alertId: payload.alertId })
-      }
-    } catch (error) {
-      console.error('Error cancelando alerta:', error)
+  socket.on('ptt-start', async (channelId: string) => {
+    if (!user?.id) return
+    const check = await canUserTalk(channelId, user.id)
+    if (!check.allowed) {
+      socket.emit('talk-error', { message: check.reason })
+      return
     }
+    console.log(`🎙️ PTT START: ${user?.alias}`)
+    socket.to(channelId).emit('ptt-status', {
+      channelId: channelId,
+      userId: user?.id,
+      alias: user?.alias,
+      isTalking: true,
+    })
   })
-  // 4. OBTENER HISTORIAL DE ALERTAS
-  socket.on('get-alerts-history', async (data: any, callback?: (data: any) => void) => {
-    if (typeof data === 'function') {
-      callback = data
+  socket.on('ptt-end', (channelId: string) => {
+    console.log(`🔇 PTT END: ${user?.alias}`)
+    socket.to(channelId).emit('ptt-status', {
+      channelId: channelId,
+      userId: user?.id,
+      alias: user?.alias,
+      isTalking: false,
+    })
+  })
+  // WebRTC señalización
+  socket.on('webrtc-offer', async (payload: { channelId: string; offer: any }) => {
+    if (!user?.id) return
+    const check = await canUserTalk(payload.channelId, user.id)
+    if (!check.allowed) return
+    console.log(`📤 Offer de ${user?.alias} → canal ${payload.channelId}`)
+    socket.to(payload.channelId).emit('webrtc-offer', {
+      channelId: payload.channelId,
+      userId: user?.id,
+      alias: user?.alias,
+      offer: payload.offer,
+    })
+  })
+  socket.on('webrtc-answer', async (payload: { channelId: string; answer: any }) => {
+    if (!user?.id) return
+    const check = await canUserTalk(payload.channelId, user.id)
+    if (!check.allowed) return
+    console.log(`📥 Answer de ${user?.alias} → canal ${payload.channelId}`)
+    socket.to(payload.channelId).emit('webrtc-answer', {
+      channelId: payload.channelId,
+      userId: user?.id,
+      answer: payload.answer,
+    })
+  })
+  socket.on('webrtc-ice-candidate', async (payload: { channelId: string; candidate: any }) => {
+    if (!user?.id) return
+    const check = await canUserTalk(payload.channelId, user.id)
+    if (!check.allowed) return
+    socket.to(payload.channelId).emit('webrtc-ice-candidate', {
+      channelId: payload.channelId,
+      userId: user?.id,
+      candidate: payload.candidate,
+    })
+  })
+  // Audio por socket (backup + historial)
+  socket.on('send-audio', async (...args: any[]) => {
+    if (!user?.id) return
+    const payload = args[0]
+    if (!payload?.channelId || !payload?.audioData) {
+      console.log(`❌ Payload inválido:`, payload)
+      return
     }
-    try {
-      if (!user?.id) return
-      // Obtenemos los canales a los que pertenece para incluir las alertas grupales
-      const userChannels = await prisma.channelMember.findMany({
-        where: { userId: user.id },
-        select: { channelId: true },
-      })
-      const channelIds = userChannels.map((c) => c.channelId)
-      const alerts = await prisma.alert.findMany({
-        where: {
-          OR: [{ userId: user.id }, { targetUserId: user.id }, { channelId: { in: channelIds } }],
-        },
-        orderBy: { createdAt: 'desc' },
-        include: {
-          user: { select: { alias: true, id: true } },
-          targetUser: { select: { alias: true, id: true } },
-          channel: { select: { name: true, id: true } },
-        },
-      })
-
-      if (callback) callback({ success: true, alerts })
-    } catch (e) {
-      console.error('Error obteniendo historial de alertas:', e)
-      if (callback) callback({ success: false, error: 'Error al obtener alertas' })
+    // Doble check por si lograron bypassear el ptt-start
+    const check = await canUserTalk(payload.channelId, user.id)
+    if (!check.allowed) return
+    console.log(`🔊 Audio de ${user?.alias} → canal ${payload.channelId} (${payload.audioData.length} chars)`)
+    socket.to(payload.channelId).emit('receive-audio', {
+      channelId: payload.channelId,
+      userId: user?.id,
+      alias: user?.alias,
+      audioData: payload.audioData,
+    })
+  })
+  // Consulta manual de estado en línea (un usuario)
+  socket.on('check-online-status', async (targetUserId: string) => {
+    const socketsInRoom = await io.in(targetUserId).fetchSockets()
+    const isOnline = socketsInRoom.length > 0
+    socket.emit('online-status', {
+      userId: targetUserId,
+      isOnline,
+    })
+  })
+  // Consulta masiva de estado en línea (múltiples usuarios)
+  socket.on('check-users-status', async (userIds: string[]) => {
+    if (!Array.isArray(userIds)) return
+    const results: { userId: string; isOnline: boolean }[] = []
+    for (const userId of userIds) {
+      const socketsInRoom = await io.in(userId).fetchSockets()
+      results.push({ userId, isOnline: socketsInRoom.length > 0 })
     }
+    socket.emit('users-status', results)
   })
 }
