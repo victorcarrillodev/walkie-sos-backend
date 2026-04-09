@@ -22,7 +22,8 @@ app.use(helmet()) // Headers de seguridad
 app.use(
   cors({
     origin: env.CORS_ORIGIN || '*',
-    methods: ['GET', 'POST'],
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
   }),
 )
 app.use(express.json()) // Body parser para JSON
