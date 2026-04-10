@@ -19,7 +19,7 @@ export class ChannelService {
         description: data.description,
         password: data.password,
         maxMessageDuration: data.maxMessageDuration || 60,
-        isGroup: true, // Asumimos que es grupo por defecto
+        isGroup: data.name.startsWith('direct_') ? false : true, // Los canales directos no son grupos
         ownerId: userId,
         members: {
           create: {
@@ -115,9 +115,9 @@ export class ChannelService {
     return await prisma.channelMember.findMany({
       where: { channelId },
       include: {
-        user: { select: { id: true, alias: true, firstName: true } }
+        user: { select: { id: true, alias: true, firstName: true } },
       },
-      orderBy: { joinedAt: 'asc' }
+      orderBy: { joinedAt: 'asc' },
     })
   }
 
@@ -127,12 +127,16 @@ export class ChannelService {
 
     return await prisma.channel.update({
       where: { id: channelId },
-      data: { isMuted }
+      data: { isMuted },
     })
   }
 
   // 7.5 NUEVO: Actualizar ajustes del canal (contraseña, duración de msg)
-  async updateChannelSettings(channelId: string, requesterId: string, data: { password?: string; maxMessageDuration?: number }) {
+  async updateChannelSettings(
+    channelId: string,
+    requesterId: string,
+    data: { password?: string; maxMessageDuration?: number },
+  ) {
     await this.verifyAdmin(channelId, requesterId)
 
     const updateData: any = {}
@@ -141,7 +145,7 @@ export class ChannelService {
 
     return await prisma.channel.update({
       where: { id: channelId },
-      data: updateData
+      data: updateData,
     })
   }
 
@@ -160,11 +164,11 @@ export class ChannelService {
 
     // Buscamos al miembro a penalizar
     const targetMember = await prisma.channelMember.findUnique({
-      where: { userId_channelId: { userId: targetUserId, channelId: channelId } }
+      where: { userId_channelId: { userId: targetUserId, channelId: channelId } },
     })
 
     if (!targetMember) throw new Error('El usuario no está en este grupo.')
-    
+
     // Reglas de jerarquía
     if (targetMember.role === MemberRole.ADMIN) {
       throw new Error('No puedes penalizar a un Administrador.')
@@ -175,7 +179,7 @@ export class ChannelService {
 
     return await prisma.channelMember.update({
       where: { id: targetMember.id },
-      data: { mutedUntil }
+      data: { mutedUntil },
     })
   }
 
@@ -188,7 +192,7 @@ export class ChannelService {
     }
 
     const targetMember = await prisma.channelMember.findUnique({
-      where: { userId_channelId: { userId: targetUserId, channelId: channelId } }
+      where: { userId_channelId: { userId: targetUserId, channelId: channelId } },
     })
 
     if (!targetMember) throw new Error('El usuario no está en este grupo.')
@@ -196,7 +200,7 @@ export class ChannelService {
 
     return await prisma.channelMember.update({
       where: { id: targetMember.id },
-      data: { role: newRole }
+      data: { role: newRole },
     })
   }
 
@@ -204,7 +208,7 @@ export class ChannelService {
   async deleteChannel(channelId: string, requesterId: string) {
     const channel = await prisma.channel.findUnique({
       where: { id: channelId },
-      include: { members: true }
+      include: { members: true },
     })
 
     if (!channel) throw new Error('El canal no existe.')
@@ -223,7 +227,7 @@ export class ChannelService {
   // --- Helpers ---
   private async verifyAdmin(channelId: string, requesterId: string) {
     const member = await prisma.channelMember.findUnique({
-      where: { userId_channelId: { userId: requesterId, channelId: channelId } }
+      where: { userId_channelId: { userId: requesterId, channelId: channelId } },
     })
 
     if (!member) throw new Error('No perteneces a este grupo.')
@@ -233,7 +237,7 @@ export class ChannelService {
 
   private async verifyAdminOrModerator(channelId: string, requesterId: string) {
     const member = await prisma.channelMember.findUnique({
-      where: { userId_channelId: { userId: requesterId, channelId: channelId } }
+      where: { userId_channelId: { userId: requesterId, channelId: channelId } },
     })
 
     if (!member) throw new Error('No perteneces a este grupo.')
