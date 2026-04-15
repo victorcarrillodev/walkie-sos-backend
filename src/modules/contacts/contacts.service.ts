@@ -28,8 +28,10 @@ export class ContactsService {
   }
 
   async addContactByAlias(userId: string, targetAlias: string) {
+    const cleanedAlias = targetAlias.startsWith('@') ? targetAlias.slice(1) : targetAlias
+
     const targetUser = await prisma.user.findUnique({
-      where: { alias: targetAlias },
+      where: { alias: cleanedAlias },
     })
 
     if (!targetUser) {
